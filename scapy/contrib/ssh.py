@@ -62,21 +62,22 @@ SSH_MESSAGE = {1:'disconnect',
                20:'kexinit',
                21:'newkeyx'}
 
-#STATIC_END_OF_DATA_V1_LENGTH = 24
-#
-#RTR_VERSION = {0: '0',
-#               1: '1'}
-#
-#ERROR_LIST = {0: 'Corrupt Data',
-#              1: 'Internal Error',
-#              2: 'No data Available',
-#              3: 'Invalid Request',
-#              4: 'Unsupported Protocol Version',
-#              5: 'Unsupported PDU Type',
-#              6: 'Withdrawal of Unknown Record',
-#              7: 'Duplicate Announcement Received',
-#              8: 'Unexpected Protocol Version'}
-#
+SSH_DISCONNECT_REASON = {1:'Host not allowed to connect',
+                         2:'Protocol error',
+                         3:'Key exchange failed',
+                         4:'Reserved',
+                         5:'Mac error',
+                         6:'Compression error',
+                         7:'Service not avalaible',
+                         8:'Protocol version not supported',
+                         9:'Host key not verifiable',
+                         10:'Connection lost',
+                         11:'By application',
+                         12:'Too many connections',
+                         13:'Auth cancelled by user',
+                         14:'No more auth methods avalaible',
+                         15:'Illegal username'}
+
 #
 #class RTRErrorReport(Packet):
 #
@@ -165,6 +166,15 @@ class SSHVersionExchange(Packet):
     name = 'SSH Version Exchange'
     fields_desc = [FieldListField('comments', ['SSH-2.0-scapySSH_1.0\x0d\x0a'], StrStopField('version', None, b"\x0d\x0a", 0))] 
 
+SSH_PACKET = {1:'disconnect',
+              2:'ignore',
+              3:'unimplemented',
+              4:'debug',
+              5:'service_request',
+              6:'service_accept',
+              20:SSHKeyExchange,
+              21:'newkeyx'}
+
 
 class SSH(Packet):
     '''
@@ -182,8 +192,7 @@ class SSH(Packet):
             if ''.join(map(str, struct.unpack('cccc', _pkt[:4]))) == 'SSH-':
                 return SSHVersionExchange
             elif len(_pkt) >= 5:
-                if orb(_pkt[5]) == 20:
-                    return SSHKeyExchange
+                return(SSH_PACKET[orb(_pkt[5])])
         return SSHBinaryPacket
 
 
