@@ -57,10 +57,12 @@ SSH_MESSAGE = {1:'disconnect',
                2:'ignore',
                3:'unimplemented',
                4:'debug',
-               5:'service_request',
-               6:'service_accept',
+               5:'service request',
+               6:'service accept',
                20:'kexinit',
-               21:'newkeyx'}
+               21:'newkeyx',
+               30:'Diffie-Hellman client key exchange init',
+               31:'Diffie-Hellman server key exchange init'}
 
 SSH_DISCONNECT_REASON = {1:'Host not allowed to connect',
                          2:'Protocol error',
@@ -78,34 +80,15 @@ SSH_DISCONNECT_REASON = {1:'Host not allowed to connect',
                          14:'No more auth methods avalaible',
                          15:'Illegal username'}
 
-#
-#class RTRErrorReport(Packet):
-#
-#    '''
-#
-#    Error Report packet from section 5.10
-#    https://tools.ietf.org/html/rfc6810#section-5.10
-#
-#    '''
-#    name = 'Error Report'
-#    fields_desc = [ByteEnumField('rtr_version', 0, RTR_VERSION),
-#                   ByteEnumField('pdu_type', 10, PDU_TYPE),
-#                   ShortEnumField('error_code', 0, ERROR_LIST),
-#                   IntField('length', None),
-#                   FieldLenField('length_of_encaps_PDU',
-#                                 None, fmt='!I', length_of='erroneous_PDU'),
-#                   StrLenField('erroneous_PDU', '',
-#                               length_from=lambda x: x.length_of_encaps_PDU),
-#                   FieldLenField('length_of_error_text', None, fmt='!I',
-#                                 length_of='error_text'),
-#                   StrLenField('error_text', '',
-#                               length_from=lambda x: x.length_of_error_text)]
-#
-#    def post_build(self, pkt, pay):
-#        temp_len = len(pkt) + 2
-#        if not self.length:
-#            pkt = pkt[:2] + struct.pack('!I', temp_len) + pkt[6:]
-#        return pkt + pay
+class SSHEncryptedBinaryPacket(Packet):
+    '''
+        Generic Binary SSH packet
+        https://tools.ietf.org/html/rfc4253#section-6
+    '''
+    name = 'SSH Encrypted Binary'
+    fields_desc = [IntField('packet_length', 0)]
+                   #StrLenField('payload', '', length_from = lambda : len(x - 4))]
+
 
 class SSHBinaryPacket(Packet):
     '''
@@ -118,8 +101,6 @@ class SSHBinaryPacket(Packet):
                    StrLenField('payload', '', length_from = lambda x: x.packet_length - x.padding_length - 1),
                    StrLenField('padding', '', length_from = lambda x: x.padding_length),
                    StrLenField('mac', '')] # TODO : length a calculer selon le cipher choisi (super...)
-
-    # note : length of the concatenation of 'packet_length', 'padding_length', 'payload', and 'random padding' MUST be a multiple of the cipher block size or 8, whichever is larger
 
 
 class SSHKeyExchange(Packet):
@@ -157,6 +138,33 @@ class SSHKeyExchange(Packet):
                    StrLenField('padding', '', length_from = lambda x: x.padding_length)]
 
 
+class SSHDHKeyExchangeInitClient(Packet):
+    '''
+        SSH Key Exchange packet
+        https://tools.ietf.org/html/rfc4253#section-7.1
+    '''
+    name = 'SSH Key Exchange client'
+    fields_desc = [IntField('packet_length', 16),
+                   FieldLenField('padding_length', 0, fmt='B', length_of ='padding'),
+                   ByteEnumField('message', 30, SSH_MESSAGE),
+                   FieldLenField('client_key_length', 0, fmt='I', length_of='client_key'),
+                   StrLenField('client_key', '', length_from = lambda x:x.client_key_length),
+                   StrLenField('padding', '', length_from = lambda x: x.padding_length)]
+
+class SSHDHKeyExchangeInitServer(Packet):
+    '''
+        SSH Key Exchange packet
+        https://tools.ietf.org/html/rfc4253#section-7.1
+    '''
+    name = 'SSH Key Exchange server'
+    fields_desc = [IntField('packet_length', 16),
+                   FieldLenField('padding_length', 0, fmt='B', length_of ='padding'),
+                   ByteEnumField('message', 31, SSH_MESSAGE),
+                   FieldLenField('client_key_length', 0, fmt='I', length_of='client_key'),
+                   StrLenField('client_key', '', length_from = lambda x:x.client_key_length),
+                   StrLenField('padding', '', length_from = lambda x: x.padding_length)]
+
+
 
 class SSHVersionExchange(Packet):
     '''
@@ -173,7 +181,9 @@ SSH_PACKET = {1:'disconnect',
               5:'service_request',
               6:'service_accept',
               20:SSHKeyExchange,
-              21:'newkeyx'}
+              21:'newkeyx',
+              30:SSHDHKeyExchangeInitClient,
+              31:SSHDHKeyExchangeInitServer}
 
 
 class SSH(Packet):
@@ -192,7 +202,12 @@ class SSH(Packet):
             if ''.join(map(str, struct.unpack('cccc', _pkt[:4]))) == 'SSH-':
                 return SSHVersionExchange
             elif len(_pkt) >= 5:
-                return(SSH_PACKET[orb(_pkt[5])])
+                print('{}'.format(struct.unpack('I', _pkt[:4])[0]))
+                print('{}'.format(len(_pkt[5:])))
+                if struct.unpack('!I', _pkt[:4])[0] == len(_pkt[5:]) + 1:
+                    return(SSH_PACKET[orb(_pkt[5])])
+                else:
+                    return SSHEncryptedBinaryPacket
         return SSHBinaryPacket
 
 
@@ -201,4 +216,4 @@ bind_layers(TCP, SSH, sport=22)  # reserved port
 
 if __name__ == '__main__':
     from scapy.main import interact
-    interact(mydict=globals(), mybanner='RPKI to Router')
+    interact(mydict=globals(), mybanner='SSH')
