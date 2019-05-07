@@ -114,6 +114,14 @@ class SimplePassword(Packet):
                    ByteField('Auth_Key_ID', 0),
                    StrField('Password', '')]
 
+# TODO hash = Tout le paquet bfd+entete auth+mdp pad de \x00 sur 20 octets
+# exemple : pkt2 = rdpcap('bfd-auth-sha1.pcap')[164]
+# del(pkt2[3].Auth_Key_Digest)
+# hashed = hashlib.sha1()
+# hashed.update(raw(pkt2[3]))
+# hashed.update(b'test'+b'\x00' * 16)
+# hashed.digest().hex()
+
 class KeyedMD5(Packet):
     '''
     Keyed MD5 authentication section from section 4.3
